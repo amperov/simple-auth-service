@@ -1,0 +1,14 @@
+app:
+  port: 8080
+
+db:
+  host: localhost
+  port: 5432
+  username: unflat
+  password: unflat
+  dbname: auth-db
+  sslmode: disable
+
+
+tools:
+  PasswordSalt: sg2fh1sd2kl6gh3fl4sd3jk4hg9ls
