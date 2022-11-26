@@ -59,7 +59,7 @@ func (c *Client) IsExist(Username, Email, Password string, ctx context.Context) 
 	db := c.conn
 	var exist bool
 
-	query := fmt.Sprintf("SELECT exists(id) FROM users WHERE username=$1 AND password_hash=$2")
+	query := fmt.Sprintf("SELECT exists(SELECT user_id FROM users WHERE username=$1 AND password_hash=$2)")
 	PasswordHash, err := hash.HashPassword(Password)
 	if err != nil {
 		return exist, err
@@ -70,7 +70,7 @@ func (c *Client) IsExist(Username, Email, Password string, ctx context.Context) 
 		return exist, err
 	}
 	if exist != true {
-		query = fmt.Sprintf("SELECT exists(id) FROM users WHERE email=$1 AND password_hash=$2")
+		query = fmt.Sprintf("SELECT exists(SELECT user_id FROM users WHERE email=$1 AND password_hash=$2)")
 
 		row = db.QueryRow(ctx, query, Email, PasswordHash)
 		err = row.Scan(&exist)
@@ -84,7 +84,7 @@ func (c *Client) Insert(Username, Email, Password string, ctx context.Context) (
 	db := c.conn
 	var id int
 
-	query := fmt.Sprintf("INSERT INTO users ( username, email, password_hash) values ($1, $2, $3) returning id")
+	query := fmt.Sprintf("INSERT INTO users ( username, email, password_hash) values ($1, $2, $3) RETURNING user_id")
 	PasswordHash, err := hash.HashPassword(Password)
 	if err != nil {
 		return 0, err
@@ -92,6 +92,7 @@ func (c *Client) Insert(Username, Email, Password string, ctx context.Context) (
 	row := db.QueryRow(ctx, query, Username, Email, PasswordHash)
 	err = row.Scan(&id)
 	if err != nil {
+		fmt.Println(err.Error())
 		return 0, err
 	}
 	return id, nil
@@ -100,12 +101,12 @@ func (c *Client) Get(Username, Email, Password string, ctx context.Context) (int
 	db := c.conn
 	var id int
 
-	query := fmt.Sprintf("SELECT id FROM users WHERE (email=$1 AND password_hash=$2) OR (username=$3 AND password_hash=$2)")
+	query := fmt.Sprintf("SELECT user_id FROM users WHERE (email=$1 AND password_hash=$2) OR (username=$3 AND password_hash=$2)")
 	PasswordHash, err := hash.HashPassword(Password)
 	if err != nil {
 		return 0, err
 	}
-	row := db.QueryRow(ctx, query, Username, PasswordHash, Email)
+	row := db.QueryRow(ctx, query, Email, PasswordHash, Username)
 	err = row.Scan(&id)
 	if err != nil {
 		return 0, err
