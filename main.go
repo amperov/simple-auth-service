@@ -3,13 +3,13 @@ package main
 import (
 	"authService/internal/business/service"
 	"authService/internal/stores"
-	"authService/internal/transport/httpv1/user"
+	grpc2 "authService/internal/transport/grpc"
 	"authService/pkg/auth"
 	"authService/pkg/db"
-	"authService/server"
-	"github.com/julienschmidt/httprouter"
 	"github.com/spf13/viper"
+	"google.golang.org/grpc"
 	"log"
+	"net"
 )
 
 func main() {
@@ -18,11 +18,10 @@ func main() {
 		log.Printf("[FATAL] error reading config\n%s\n", err.Error())
 		return
 	}
-
-	router := httprouter.New()
-
-	server := server.NewServer()
-
+	listen, err := net.Listen("tcp", ":8080")
+	if err != nil {
+		return
+	}
 	client, err := db.GetClient()
 	if err != nil {
 		return
@@ -33,12 +32,17 @@ func main() {
 	tm := auth.NewTokenManager()
 
 	authService := service.NewAuthService(authStorage, tm)
+	newServer := grpc.NewServer()
 
-	handler := user.NewAuthHandler(authService)
+	grpcServer := grpc2.NewGRPCServer(authService)
 
-	handler.Register(router)
+	grpc2.RegisterAuthServer(newServer, grpcServer)
 
-	server.Run(router)
+	err = newServer.Serve(listen)
+	if err != nil {
+		log.Fatalln(err.Error())
+		return
+	}
 }
 
 func InitConfig() error {
