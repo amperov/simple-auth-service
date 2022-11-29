@@ -2,11 +2,12 @@ syntax = "proto3";
 
 package auth;
 option go_package =
-    "./"
+    "/"
 ;
 service Auth{
   rpc SignUp(SignUpRequest) returns (SignUpResponse) {}
   rpc SignIn(SignInRequest) returns (SignInResponse) {}
+  rpc IsAuth(IsAuthRequest) returns (IsAuthResponse) {}
 }
 
 message SignUpResponse{
@@ -18,10 +19,21 @@ message SignUpRequest{
   string Password = 3;
 }
 message SignInResponse{
-  string Token = 1;
+  string AccessCode = 1;
 }
 message SignInRequest{
   string Username = 1;
   string Email = 2;
   string Password = 3;
+}
+message IsAuthRequest{
+  string AccessCode = 1;
+}
+//IsAuthResponse return UserID = {UserID} from token
+//If Token Invalid: UserID = 0 and Auth = false
+//If Token Expired will returned User = {UserID} from Token and returned New Access code
+message IsAuthResponse{
+  int32 UserID = 1;
+  bool Auth = 2;
+  string AccessCode = 3;
 }

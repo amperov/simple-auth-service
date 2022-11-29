@@ -6,6 +6,8 @@ import (
 	grpc2 "authService/internal/transport/grpc"
 	"authService/pkg/auth"
 	"authService/pkg/db"
+	"context"
+	"github.com/go-redis/redis/v9"
 	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 	"log"
@@ -28,8 +30,14 @@ func main() {
 	}
 
 	authStorage := stores.NewAuthStorage(client)
-
-	tm := auth.NewTokenManager()
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "", // no password set
+		DB:       0,  // use default DB
+	})
+	ping := rdb.Ping(context.Background())
+	log.Println("Ping result:", ping.String())
+	tm := auth.NewTokenManager(rdb, client)
 
 	authService := service.NewAuthService(authStorage, tm)
 	newServer := grpc.NewServer()
@@ -37,7 +45,6 @@ func main() {
 	grpcServer := grpc2.NewGRPCServer(authService)
 
 	grpc2.RegisterAuthServer(newServer, grpcServer)
-
 	err = newServer.Serve(listen)
 	if err != nil {
 		log.Fatalln(err.Error())

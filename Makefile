@@ -7,6 +7,8 @@ DB_NAME := auth-db
 DB_PORT := 5432
 DB_HOST := localhost
 
+
+all_db: db-download db-run migrate-up
 db-download:
 	echo "Pulling Container"
 	docker pull postgres:$(DB_VERSION)
@@ -17,11 +19,7 @@ db-run:
 	-e POSTGRES_USER=$(DB_USER) \
 	-e POSTGRES_PASSWORD=$(DB_PASSWORD) \
 	-e POSTGRES_DB=$(DB_NAME) \
- 	-p 5432:5432 -d --rm postgres:$(DB_VERSION)
-
-db-stop:
-	echo "Stopping DB Container"
-	docker stop 874ee59092a7
+ 	-p $(DB_PORT):$(DB_PORT) -d --rm postgres:$(DB_VERSION)
 
 migrate-up:
 	migrate -path ./migrations -database "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable" up
@@ -29,3 +27,5 @@ migrate-up:
 migrate-down:
 	migrate -path ./migrations -database "postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=disable" down
 
+proto-gen:
+	protoc -I ./proto/ --go-grpc_out=./internal/transport/grpc ./proto/*.proto

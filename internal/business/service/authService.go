@@ -1,7 +1,7 @@
 package service
 
 import (
-	"authService/internal/transport/httpv1/user"
+	"authService/internal/transport/grpc"
 	"authService/internal/transport/inputs"
 	"authService/pkg/auth"
 	"context"
@@ -18,7 +18,7 @@ type authService struct {
 	tm auth.TokenManager
 }
 
-func NewAuthService(as AuthStorage, tm auth.TokenManager) user.AuthService {
+func NewAuthService(as AuthStorage, tm auth.TokenManager) grpc.AuthService {
 	return &authService{as: as, tm: tm}
 }
 
@@ -48,6 +48,7 @@ func (s *authService) SignIn(ctx context.Context, input *inputs.AuthInput) (stri
 	if err != nil {
 		return "", err
 	}
+
 	token, err := s.tm.GenerateToken(UserID)
 	if err != nil {
 		return "", err
@@ -57,10 +58,12 @@ func (s *authService) SignIn(ctx context.Context, input *inputs.AuthInput) (stri
 
 }
 
-func (s *authService) IsAuthed(ctx context.Context, token string) (int, error) {
-	UserID, err := s.tm.ValidateToken(token)
+func (s *authService) IsAuthed(_ context.Context, AccessCode string) (int, string, error) {
+	UserID, AccessCode, err := s.tm.ValidateToken(AccessCode)
 	if err != nil {
-		return 0, err
+		log.Println("Error Validating token!")
+		return 0, "", err
 	}
-	return UserID, nil
+
+	return UserID, AccessCode, nil
 }
