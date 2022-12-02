@@ -2,6 +2,8 @@ package auth
 
 import (
 	"authService/pkg/db"
+	hash "authService/pkg/tooling"
+	"context"
 	"errors"
 	"github.com/go-redis/redis/v9"
 	"github.com/golang-jwt/jwt/v4"
@@ -13,9 +15,15 @@ import (
 var singingKey = viper.GetString("key.jwt")
 
 type TokenManager struct {
-	//TODO REDIS
 	db  *db.Client
 	red *redis.Client
+}
+
+func Error(err error) {
+	if err != nil {
+		log.Println(err.Error())
+		return
+	}
 }
 
 type TokenClaims struct {
@@ -34,6 +42,7 @@ func (t *TokenManager) GenerateToken(id int) (string, error) {
 
 	issuedAt := jwt.NewNumericDate(time.Now())
 	expiresAccess := jwt.NewNumericDate(time.Now().Add(30 * time.Minute))
+	expiresRefresh := jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour))
 
 	accessClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, &TokenClaims{
 		&jwt.RegisteredClaims{
@@ -42,23 +51,39 @@ func (t *TokenManager) GenerateToken(id int) (string, error) {
 		},
 		id,
 	})
-	//Gen Access token
+	//Gen Access Token
 	accessToken, err := accessClaims.SignedString([]byte(singingKey))
-	if err != nil {
-		log.Printf("[ERROR] Error: %s\n", err.Error())
-		return "", err
-	}
+	Error(err)
 
-	return accessToken, nil
+	refreshClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, &TokenClaims{
+		&jwt.RegisteredClaims{
+			IssuedAt:  issuedAt,
+			ExpiresAt: expiresRefresh,
+		},
+		id,
+	})
+	//Gen Refresh Token
+	refreshToken, err := refreshClaims.SignedString([]byte(singingKey))
+	Error(err)
+
+	//Now We get Hash into 20 symbols
+	accessCode := hash.Hash(accessToken, refreshToken)
+	t.red.Set(context.Background(), accessCode, accessToken, 30*time.Minute)
+
+	return accessCode, nil
 }
 
-func (t *TokenManager) ValidateToken(accessToken string) (int, string, error) {
+func (t *TokenManager) ValidateToken(accessCode string) (int, string, error) {
 	//var valid bool
-	if accessToken == "" {
+	if accessCode == "" {
 		return 0, "", nil
 	}
+	//Getting AccessToken by AccessCode
+	accessToken := t.red.Get(context.Background(), accessCode)
+	//Our access token
+	result := accessToken.Val()
 
-	token, err := jwt.ParseWithClaims(accessToken, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := jwt.ParseWithClaims(result, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid access-token")
 		}
@@ -75,5 +100,5 @@ func (t *TokenManager) ValidateToken(accessToken string) (int, string, error) {
 		return 0, "", errors.New("invalid token") //TODO
 	}
 
-	return claims.UserId, accessToken, nil
+	return claims.UserId, accessCode, nil
 }
