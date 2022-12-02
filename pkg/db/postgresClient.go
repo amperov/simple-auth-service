@@ -5,6 +5,7 @@ package db
 import (
 	hash "authService/pkg/tooling"
 	"context"
+	"errors"
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"github.com/spf13/viper"
@@ -125,4 +126,32 @@ func (c *Client) Delete(Username, Email, Password string, ctx context.Context) e
 	db.QueryRow(ctx, query, Username, PasswordHash, Email)
 
 	return nil
+}
+
+func (c *Client) GetRefresh(accessCode string, ctx context.Context) (string, error) {
+	db := c.conn
+	var refresh string
+
+	query := "SELECT refreshtoken FROM auth WHERE accesscode=$1"
+
+	row := db.QueryRow(ctx, query, accessCode)
+	err := row.Scan(&refresh)
+	if err != nil {
+		return "", errors.New("access code invalid or expired. sign-in please")
+	}
+	return refresh, nil
+}
+
+func (c *Client) SetRefresh(accessCode string, refresh string, ctx context.Context) {
+	db := c.conn
+
+	query := "INSERT INTO auth (accesscode, refreshtoken) values ($1, $2)"
+
+	_, err := db.Exec(ctx, query, accessCode, refresh)
+	if err != nil {
+		log.Println("SetRefresh:", err.Error())
+		return
+	}
+
+	return
 }

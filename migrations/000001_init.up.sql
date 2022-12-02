@@ -6,6 +6,6 @@ CREATE TABLE users (
 );
 
 CREATE TABLE auth (
-    accessCode varchar(20) not null ,
+    accessCode varchar(255) not null ,
     refreshToken varchar(255) not null
 );

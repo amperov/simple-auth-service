@@ -41,7 +41,7 @@ func (t *TokenManager) GenerateToken(id int) (string, error) {
 	}
 
 	issuedAt := jwt.NewNumericDate(time.Now())
-	expiresAccess := jwt.NewNumericDate(time.Now().Add(30 * time.Minute))
+	expiresAccess := jwt.NewNumericDate(time.Now().Add(1 * time.Minute))
 	expiresRefresh := jwt.NewNumericDate(time.Now().Add(30 * 24 * time.Hour))
 
 	accessClaims := jwt.NewWithClaims(jwt.SigningMethodHS256, &TokenClaims{
@@ -69,36 +69,63 @@ func (t *TokenManager) GenerateToken(id int) (string, error) {
 	//Now We get Hash into 20 symbols
 	accessCode := hash.Hash(accessToken, refreshToken)
 	t.red.Set(context.Background(), accessCode, accessToken, 30*time.Minute)
+	t.db.SetRefresh(accessCode, refreshToken, context.Background())
 
 	return accessCode, nil
 }
 
 func (t *TokenManager) ValidateToken(accessCode string) (int, string, error) {
 	//var valid bool
+	var validAccess bool
+
 	if accessCode == "" {
 		return 0, "", nil
 	}
 	//Getting AccessToken by AccessCode
 	accessToken := t.red.Get(context.Background(), accessCode)
+
 	//Our access token
 	result := accessToken.Val()
 
-	token, err := jwt.ParseWithClaims(result, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+	aToken, err := jwt.ParseWithClaims(result, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.New("invalid access-token")
 		}
 
 		return []byte(singingKey), nil
 	})
+	validAccess = true
 	if err != nil {
+		validAccess = false
 		log.Print(err.Error())
-		return 0, "", err
 	}
-	claims, ok := token.Claims.(*TokenClaims)
-	if !ok {
-
-		return 0, "", errors.New("invalid token") //TODO
+	if validAccess != false {
+		claims, ok := aToken.Claims.(*TokenClaims)
+		if !ok {
+			return 0, "", errors.New("invalid token") //TODO
+		}
+		return claims.UserId, accessCode, nil
+	}
+	if validAccess == false {
+		refresh, err := t.db.GetRefresh(accessCode, context.Background())
+		if err != nil {
+			return 0, "", err
+		}
+		rToken, err := jwt.ParseWithClaims(refresh, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, errors.New("invalid access-token")
+			}
+			return []byte(singingKey), nil
+		})
+		if err != nil {
+			return 0, "", err
+		}
+		claims, ok := rToken.Claims.(*TokenClaims)
+		if !ok {
+			return 0, "", errors.New("invalid token") //TODO
+		}
+		return claims.UserId, accessCode, nil
 	}
 
-	return claims.UserId, accessCode, nil
+	return 0, "", err
 }
